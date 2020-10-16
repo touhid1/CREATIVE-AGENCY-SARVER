@@ -1,153 +1,181 @@
 const express = require('express');
-const cors = require('cors');
 const bodyParser = require('body-parser');
+const cors = require('cors');
 const fs = require('fs-extra');
-const fileUpload = require('express-fileupload');
-const { ObjectId } = require('mongodb');
-const MongoClient = require('mongodb').MongoClient;
 require('dotenv').config();
-
+const fileUpload = require('express-fileupload');
+const MongoClient = require('mongodb').MongoClient;
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.nmory.azure.mongodb.net/${process.env.DB_NAME}?retryWrites=true&w=majority`;
-const app = express()
 
-app.use(cors())
-app.use(bodyParser.json())
-app.use(express.static('doctors'));
+const ObjectId = require('mongodb').ObjectId; 
+
+const port = 5000;
+var app = express();
+app.use(bodyParser.json());
+app.use(cors());
+app.use(express.static('clientProjects'));
 app.use(fileUpload());
 
-app.get('/', (req, res) => {
-  res.send('Hello World!')
-})
-
+app.get('/', (req, res)=>{
+    res.send("Hello World")
+});
 
 
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 client.connect(err => {
-  const serviceCollection = client.db(process.env.DB_NAME).collection("service");
-  const placeOrderCollection = client.db(process.env.DB_NAME).collection("placeOrder");
-  const reviewCollection = client.db(process.env.DB_NAME).collection("reviews");
-  
+    const serviceCollection = client.db(process.env.DB_NAME).collection('service');
+    const adminCollection = client.db(process.env.DB_NAME).collection('admins');
+    const clientCollection = client.db(process.env.DB_NAME).collection('clients');
+    const clientCommentsCollection = client.db(process.env.DB_NAME).collection('clientComments');
+    
+    app.post('/addAdmin', (req, res)=>{
+        const admin = req.body;
 
-  app.post('/addService', (req, res) => {
-    const file = req.files.file;
-    const name = req.body.name;
-    const email = req.body.email;
-    const filePath = `${__dirname}/service/${file.name}`;
-    file.mv(filePath, err => {
-        if(err){
-            console.log(err);
-            res.status(500).send({msg: 'Failed to upload Image'});
-        }
-        const newImg = fs.readFileSync(filePath);
-        const encImg = newImg.toString('base64');
+        adminCollection.insertOne(admin)
+        .then(result =>{
 
-        var image = {
-              contentType: req.files.file.mimetype,
-              size: req.files.file.size,
-              img: Buffer.from(encImg, 'base64')
-           };
+            res.send(result);
+        });
+    })
 
-        doctorCollection.insertOne({name, email, image})
+    app.get('/admins', (req, res)=>{
+        const queryEmail = req.query.email;
+
+        adminCollection.find({email: queryEmail})
+        .toArray((err, documents) =>{
+
+            res.send(documents);
+        });
+    })
+
+
+    app.get('/clients', (req, res) =>{
+        clientCollection.find({})
+        .toArray( (err, documents) =>{
+            res.send(documents); 
+        })
+    })
+    
+
+    app.patch('/clients/:id', (req, res) =>{
+        const id = req.params.id;
+
+        clientCollection.updateOne({_id: ObjectId(id)},
+        {
+            $set: {action: req.body.action,actionBG: req.body.actionBG, actionColor: req.body.actionColor}
+        })
         .then(result => {
-            fs.remove(filePath, error => {
-                if(error) {
-                    console.log(error);
-                    res.status(500).send({msg: 'Failed to upload Image'});
+            res.send(result.modifiedCount > 0);
+        })
+    })
+    app.post('/addServices', (req, res)=>{
+        const adminEmail = req.body.adminEmail;
+        const title = req.body.title;  
+        const description = req.body.description;
+        const file = req.files.file;
+        const filePath = `${__dirname}/addedServices/${file.name}`;
+            file.mv(filePath, (err) => {
+                if(err){
+                    console.log(err);
+                    res.status(500).send({msg: 'Failed to upload image'});
                 }
+                const newImg = fs.readFileSync(filePath);
+                const encImg = newImg.toString('base64');
+
+                const image = {
+                    contentType: file.mimetype,
+                    size: file.size,
+                    img: Buffer(encImg, 'base64')
+                };
+
+                serviceCollection.insertOne({adminEmail,title,description,image})
+                .then(result => {
+                    fs.remove(filePath, error => {
+                    if(error){
+                        console.log(error);
+                    }
+                    res.send(result.insertedCount > 0);
+                })
+            })
+        })
+    })
+
+    app.get('/services', (req, res) =>{
+        serviceCollection.find({})
+        .toArray( (err, documents) =>{
+            res.send(documents); 
+        })
+    })
+
+    app.get('/services/:id', (req, res) =>{
+        const id = req.params.id;
+        serviceCollection.findOne({_id: ObjectId(id)})
+        .then(document => {
+            res.send(document);
+        })
+    })
+
+    app.post('/addClientProject', (req, res)=>{
+        const customerEmail = req.body.customerEmail;
+        const action = req.body.action;  
+        const actionBG = req.body.actionBG;  
+        const actionColor = req.body.actionColor;  
+        const name = req.body.name;  
+        const price = req.body.price;  
+        const email = req.body.email;  
+        const projectTitle = req.body.projectTitle;  
+        const projectDetails = req.body.projectDetails;
+        const file = req.files.file;
+                const filePath = `${__dirname}/clientProjects/${file.name}`;
+            file.mv(filePath, (err) => {
+                if(err){
+                    console.log(err);
+                    res.status(500).send({msg: 'Failed to upload image'});
+                }
+                const newImg = fs.readFileSync(filePath);
+                const encImg = newImg.toString('base64');
+
+                const image = {
+                    contentType: file.mimetype,
+                    size: file.size,
+                    img: Buffer(encImg, 'base64')
+                };
+
+                clientCollection.insertOne({customerEmail,name,email,action,actionBG,actionColor,projectTitle,projectDetails,price,image})
+                .then(result => {
+                    fs.remove(filePath, error => {
+                        if(error){
+                            console.log(error);
+                        }
+                        res.send(result.insertedCount > 0);
+                    })
+                })
+            })
+        })
+
+        app.get('/clients/email', (req, res) =>{
+            const queryEmail = req.query.checkedEmail;
+            clientCollection.find({customerEmail: queryEmail})
+            .toArray( (err, documents) =>{
+            res.send(documents); 
+            })
+        })
+
+        app.post('/clientComments', (req, res)=>{
+            const comment = req.body;
+            clientCommentsCollection.insertOne(comment)
+            .then(result => {
                 res.send(result.insertedCount > 0);
             })
         })
-        return res.send({name: file.name, path: `/${file.name}`})
-    })
-})
 
-  app.get('/getService', (req,res) => {
-    serviceCollection.find({})
-    .toArray((err, docs)=>{
-      res.status(200).send(docs);
-    })
-  })
-
-
-
-  app.post('/placeOrder', (req, res) => {
-    const file = req.files.file;
-    const name = req.body.name;
-    const email = req.body.email;
-    const selectedServiceName = req.body.selectedServiceName;
-    const description = req.body.description;
-    const price = req.body.price;
-    const serviceId = req.body.serviceId;
-    const filePath = `${__dirname}/placeOrder/${file.name}`;
-
-    file.mv(filePath, err => {
-      if(err){
-        res.status(500).send({message: "Failed to upload image"});
-      }
-
-      const newImg = fs.readFileSync(filePath);
-      const encImg = newImg.toString('base64');
-
-      var image = {
-        contentType: req.files.file.mimeType,
-        size: req.files.file.size,
-        img: Buffer(encImg, 'base64')
-      }
-
-      placeOrderCollection.insertOne({name, email, selectedServiceName, description, price, image, serviceId})
-      .then(result => {
-        fs.remove(filePath, error => {
-          if(error){
-            console.log(error);
-            res.status(500).send({message: "Failed to upload Image "});
-          }
-          res.send(result.insertedCount > 0)
+        app.get('/clientComments', (req, res) =>{
+            clientCommentsCollection.find({})
+            .toArray( (err, documents) =>{
+            res.send(documents); 
+            })
         })
-      })
 
-      return res.send({name: file.name, path: `/${file.name}`})
-
-    })
-
-  })
-
-
-  app.post('/getUserOrderList', (req,res) => {
-    const email = req.body.email;
-    placeOrderCollection.find({email: email})
-    .toArray((err, docs)=>{
-      res.status(200).send(docs);
-    })
-  })
-
-  app.post('/getOrderedServiceList', (req,res) => {
-    const serviceId = req.body.serviceId;
-    console.log(serviceId)
-    serviceCollection.find({_id: ObjectId(serviceId)})
-      .toArray((err, docs)=>{
-      res.status(200).send(docs);
-    
-  })
-
-});
-
-app.post('/addReview', (req, res)=> {
-  const review  = req.body;
-  reviewCollection.insertOne(review)
-  .then(result => {
-    res.send(result.insertedCount > 0 )
-  })
-
-})
-
-
-
-
-});
-
-// const PORT = process.env.PORT || 5000
-const port = 5000
-app.listen(port, () => {
-  console.log(`Example app listening at http://localhost:${port}`)
-})
+    });
+app.listen(process.env.PORT || port)
